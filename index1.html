@@ -1053,7 +1053,6 @@ const crystalsData = [
     }
   }
 ];
-</script>
 <!-- ====== END PART 3/5 ====== -->
 <!-- ========== index.html — PART 4/5 (3D Model Loader + Viewer) ========== -->
 /* ------------------------------------------------------------------------
@@ -1154,8 +1153,8 @@ async function loadCrystalById(crystalId) {
     DRAW A RANDOM CRYSTAL
 ------------------------------------------------------------------------ */
 function drawRandomCrystal() {
-  Object.assign(random, crystalsText[random.id]);
   const random = crystalsData[Math.floor(Math.random() * crystalsData.length)];
+  Object.assign(random, crystalsText[random.id]);
   loadCrystalById(random.id);
   updatePanel(random);
   document.body.classList.add("result-mode");
@@ -1201,7 +1200,6 @@ function toggleMusic() {
   if (audio.paused) { audio.play(); }
   else { audio.pause(); }
 }
-</script>
 <!-- ====== END PART 4/5 ====== -->
 <!-- ========== index.html — PART 5/5 (UI finishing + END) ========== -->
 
@@ -1258,4 +1256,5 @@ function toggleMusic() {
 
 </body>
 </html>
+
 
