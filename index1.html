@@ -91,8 +91,9 @@
   <!-- ====== 插入 PART 2/5 - Three.js 初始化程式碼 (接在此處) ====== -->
   <!-- 下一段我會從 Three.js 的 renderer/camera/lights 開始，請接在此標記之後 -->
 <!-- ========== index.html — PART 2/5 (Three.js init, loaders, nebula) ========== -->
-<script>
+<script type="module">
 /* ========== 基本 Three.js 場景 ========== */
+import { crystalsText } from "./data/crystalsText.js";
 const container = document.getElementById('canvas-wrapper');
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x000000);
@@ -276,7 +277,6 @@ function setMainModel(group) {
 </script>
 <!-- ====== end PART 2/5 ====== -->
 <!-- ========== index.html — PART 3/5 (A) — crystalsData (1–10) ========== -->
-<script>
 const crystalsData = [
   {
     id: 1,
@@ -1056,7 +1056,6 @@ const crystalsData = [
 </script>
 <!-- ====== END PART 3/5 ====== -->
 <!-- ========== index.html — PART 4/5 (3D Model Loader + Viewer) ========== -->
-<script>
 /* ------------------------------------------------------------------------
     Material Enhancement: Apply custom mineral visual parameters
 ------------------------------------------------------------------------ */
@@ -1155,6 +1154,7 @@ async function loadCrystalById(crystalId) {
     DRAW A RANDOM CRYSTAL
 ------------------------------------------------------------------------ */
 function drawRandomCrystal() {
+  Object.assign(random, crystalsText[random.id]);
   const random = crystalsData[Math.floor(Math.random() * crystalsData.length)];
   loadCrystalById(random.id);
   updatePanel(random);
@@ -1256,32 +1256,6 @@ function toggleMusic() {
   <p style="font-size:20px;opacity:.8;">點擊下方按鈕，抽出今天引導你的水晶。</p>
 </div>
 
-<!-- Right Panel -->
-<div id="info-panel"
-     style="position:absolute;top:0;right:0;width:360px;height:100%;
-            background:rgba(255,255,255,0.85);backdrop-filter:blur(8px);
-            padding:24px;overflow-y:auto;display:none;z-index:4;">
-  <div id="panel-content"></div>
-</div>
-
-<script>
-  /* When entering result mode, show right panel */
-  const observer = new MutationObserver(()=>{
-    if (document.body.classList.contains("result-mode")) {
-      document.getElementById("info-panel").style.display = "block";
-    }
-  });
-  observer.observe(document.body, { attributes: true });
-
-  /* Auto resize 3D canvas to fill screen */
-  window.addEventListener("resize", () => {
-    if (renderer && camera) {
-      renderer.setSize(window.innerWidth, window.innerHeight);
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-    }
-  });
-</script>
-
 </body>
 </html>
+
