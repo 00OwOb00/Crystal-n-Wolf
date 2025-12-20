@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水晶與狼 Crystal & Wolf</title>
+    
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Allura&family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,400&display=swap" rel="stylesheet">
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+
+    <script src="./data/crystalsText.js"></script>
+
+    <style>
+        :root {
+            --gold: #D4AF37;
+            --text-main: #2c2c2c;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            background-color: #050505;
+            font-family: 'Cormorant Garamond', serif;
+            color: var(--text-main);
+        }
+
+        /* 背景微光 */
+        #bg-gradient {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(circle at center, #1a1a1a 0%, #000000 100%);
+            z-index: 0;
+        }
+
+        /* 3D 容器 */
+        #app-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            z-index: 1;
+        }
+
+        #canvas-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            transition: width 1s ease;
+        }
+
+        /* 結果模式：左側留給水晶 */
+        body.result-mode #canvas-wrapper {
+            width: 60%; 
+        }
+
+        /* UI 層 */
+        #ui-layer {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 10;
+            pointer-events: none;
+        }
+
+        .top-bar {
+            position: absolute;
+            top: 0;
+            width: 100%;
+            padding: 25px 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            pointer-events: auto;
+            z-index: 20;
+        }
+
+        .logo {
+            font-family: 'Allura', cursive;
+            font-size: 2.2rem;
+            color: #fff;
+            letter-spacing: 2px;
+            text-shadow: 0 0 10px rgba(255,255,255,0.5);
+        }
+
+        /* 首頁按鈕 */
+        #landing-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            pointer-events: auto;
+            transition: opacity 0.8s ease;
+        }
+
+        .cta-button {
+            background: rgba(0,0,0,0.4);
+            border: 1px solid var(--gold);
+            color: var(--gold);
+            padding: 18px 45px;
+            font-family: 'Cormorant Garamond', serif;
+            font-size: 1.4rem;
+            letter-spacing: 2px;
+            cursor: pointer;
+            transition: all 0.5s ease;
+            backdrop-filter: blur(5px);
+            box-shadow: 0 0 20px rgba(212, 175, 55, 0.1);
+        }
+        .cta-button:hover {
+            background-color: var(--gold);
+            color: #000;
+            box-shadow: 0 0 30px rgba(212, 175, 55, 0.8);
+        }
+
+        /* Loading 指示器 */
+        #loading-screen {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: var(--gold);
+            font-size: 1.2rem;
+            letter-spacing: 3px;
+            pointer-events: none;
+            text-align: center;
+        }
+        .spinner {
+            width: 40px; height: 40px; border: 2px solid rgba(212,175,55,0.3);
+            border-top: 2px solid var(--gold); border-radius: 50%;
+            margin: 0 auto 15px auto; animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* 右側卡片 */
+        #result-panel {
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: 40%;
+            height: 100%;
+            background: #fff;
+            box-shadow: -10px 0 50px rgba(0,0,0,0.5);
+            transform: translateX(100%);
+            transition: transform 1s cubic-bezier(0.23, 1, 0.32, 1);
+            overflow-y: auto;
+            pointer-events: auto;
+            padding: 60px 50px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            color: #333;
+        }
+
+        body.result-mode #result-panel { transform: translateX(0); }
+
+        .crystal-header { text-align: center; margin-bottom: 40px; }
+        .crystal-name { font-size: 2.8rem; font-weight: 600; color: #111; margin-bottom: 5px; }
+        .crystal-theme { font-family: 'Allura', cursive; font-size: 2.2rem; color: var(--gold); }
+        .content-block { margin-bottom: 35px; }
+        .section-label { 
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 3px; 
+            color: #999; margin-bottom: 15px; display: block; text-align: center; 
+        }
+        .text-body { 
+            font-size: 1.2rem; line-height: 1.8; color: #444; 
+            text-align: justify; font-weight: 400;
+        }
+
+        .divider-graphic {
+            width: 100%; height: 1px;
+            background: linear-gradient(90deg, transparent, var(--gold), transparent);
+            margin: 40px 0; position: relative; opacity: 0.6;
+        }
+        .divider-graphic::after {
+            content: '✦'; position: absolute; top: 50%; left: 50%;
+            transform: translate(-50%, -50%); background: #fff; padding: 0 15px;
+            color: var(--gold); font-size: 14px;
+        }
+
+        .quote-box {
+            border-left: 3px solid var(--gold); padding-left: 25px; margin: 10px 0 25px 0;
+        }
+        .quote-text { font-size: 1.5rem; font-style: italic; color: #222; font-weight: 500; }
+
+        .retry-btn {
+            background: transparent; color: #999; border: none;
+            font-family: 'Cormorant Garamond', serif; font-size: 1.1rem;
+            cursor: pointer; transition: all 0.3s; border-bottom: 1px solid transparent;
+            margin-top: auto; align-self: center; padding-bottom: 2px;
+        }
+        .retry-btn:hover { color: var(--gold); border-bottom: 1px solid var(--gold); }
+
+        .hint-overlay {
+            position: absolute; bottom: 30px; left: 30%; transform: translateX(-50%);
+            color: rgba(255,255,255,0.5); font-size: 0.9rem; letter-spacing: 1px;
+            opacity: 0; transition: opacity 1s;
+        }
+        body.result-mode .hint-overlay { opacity: 1; }
+
+        @media (max-width: 768px) {
+            body.result-mode #canvas-wrapper { width: 100%; height: 45vh; }
+            #result-panel {
+                width: 100%; height: 55vh; bottom: 0; top: auto; right: 0;
+                transform: translateY(100%); padding: 30px; border-radius: 20px 20px 0 0;
+            }
+            body.result-mode #result-panel { transform: translateY(0); }
+            .hint-overlay { left: 50%; bottom: 58%; }
+            .logo { font-size: 1.8rem; }
+            .cta-button { padding: 12px 30px; font-size: 1.1rem; }
+        }
+    </style>
+</head>
+<body>
+    <div id="bg-gradient"></div>
+
+    <div id="app-container">
+        <div id="canvas-wrapper"></div>
+        <div class="hint-overlay">拖曳旋轉以欣賞水晶細節</div>
+
+        <div id="ui-layer">
+            <div class="top-bar">
+                <div class="logo">Crystal & Wolf</div>
+            </div>
+
+            <div id="landing-content">
+                <button class="cta-button" onclick="startJourney()">我今天要專注在什麼事情上？</button>
+            </div>
+
+            <div id="loading-screen">
+                <div class="spinner"></div>
+                <div>喚醒水晶中...</div>
+            </div>
+
+            <div id="result-panel">
+                <div id="panel-content"></div>
+                <button class="retry-btn" onclick="resetApp()">再抽一張卡</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- 1. Three.js 場景設置 ---
+        const container = document.getElementById('canvas-wrapper');
+        const scene = new THREE.Scene();
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 30;
+
+        const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(window.devicePixelRatio);
+        // 開啟物理光照校正，讓 GLB 材質看起來正確
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.2;
+        renderer.outputEncoding = THREE.sRGBEncoding;
+        container.appendChild(renderer.domElement);
+
+        // --- 2. 燈光系統 (針對真實模型優化) ---
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+        scene.add(ambientLight);
+
+        const mainLight = new THREE.DirectionalLight(0xffffff, 1.5);
+        mainLight.position.set(5, 10, 7);
+        scene.add(mainLight);
+
+        // 背光/輪廓光 (讓水晶邊緣發亮)
+        const rimLight = new THREE.SpotLight(0xD4AF37, 8);
+        rimLight.position.set(-10, 5, -5);
+        rimLight.lookAt(0, 0, 0);
+        scene.add(rimLight);
+
+        // 底部補光
+        const bottomLight = new THREE.PointLight(0xffffff, 0.8);
+        bottomLight.position.set(0, -10, 0);
+        scene.add(bottomLight);
+
+        let controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.5;
+        controls.enableZoom = false;
+
+        // --- 3. 變數與載入器 ---
+        const gltfLoader = new THREE.GLTFLoader();
+        let currentModel = null;
+        let particleSystem = null;
+        let nebulaGroup = new THREE.Group();
+        let isResultMode = false;
+
+        // 檢查資料是否成功載入
+        let crystalsData = [];
+        if (window.crystalsData) {
+            crystalsData = window.crystalsData;
+            console.log(`成功載入 ${crystalsData.length} 筆水晶資料`);
+        } else {
+            console.error("找不到 window.crystalsData。請檢查 data/crystalsText.js 格式是否正確。");
+            alert("資料載入失敗，請檢查 crystalsText.js");
+        }
+
+        // --- 4. 星雲系統 (開場動畫用) ---
+        function initNebula() {
+            scene.remove(nebulaGroup);
+            nebulaGroup = new THREE.Group();
+            
+            // 使用簡單的發光球體代表星雲
+            const geo = new THREE.SphereGeometry(0.15, 8, 8);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xD4AF37 });
+
+            for(let i=0; i<40; i++) {
+                const mesh = new THREE.Mesh(geo, mat);
+                const angle = Math.random() * Math.PI * 2;
+                const radius = 3 + Math.random() * 5;
+                mesh.position.set(
+                    Math.cos(angle) * radius,
+                    (Math.random() - 0.5) * 4,
+                    Math.sin(angle) * radius
+                );
+                nebulaGroup.add(mesh);
+            }
+            scene.add(nebulaGroup);
+        }
+        initNebula();
+
+        // --- 5. 核心功能：開始抽卡 ---
+        function startJourney() {
+            if (crystalsData.length === 0) return;
+
+            // UI 切換
+            const landing = document.getElementById('landing-content');
+            landing.style.opacity = '0';
+            setTimeout(() => { landing.style.display = 'none'; }, 800);
+
+            // 星雲散開動畫
+            nebulaGroup.children.forEach(mesh => {
+                const dir = mesh.position.clone().normalize();
+                mesh.position.add(dir.multiplyScalar(20)); // 炸開
+            });
+
+            // 隨機選取
+            const crystal = crystalsData[Math.floor(Math.random() * crystalsData.length)];
+            
+            // 顯示 Loading
+            const loadingScreen = document.getElementById('loading-screen');
+            loadingScreen.style.display = 'block';
+
+            // 延遲一點點讓動畫跑完，再載入模型
+            setTimeout(() => {
+                scene.remove(nebulaGroup);
+                loadAndShowCrystal(crystal);
+            }, 600);
+        }
+
+        // --- 6. 載入 GLB 模型並正規化大小 ---
+        function loadAndShowCrystal(data) {
+            // 決定檔案名稱
+            // 優先使用 data.modelFile，如果沒有，則嘗試使用 data.enName 或 data.id
+            // 這裡假設您的資料可能有 modelFile 欄位，例如 "amethyst.glb"
+            let filename = data.modelFile;
+            
+            // 如果資料裡沒有 modelFile 欄位，這裡做一個防呆機制：
+            // 假設您還沒加這個欄位，您可以暫時將檔案命名為 1.glb, 2.glb 配合索引，
+            // 或者確保 JS 檔裡有 modelFile: "xxx.glb"。
+            if (!filename) {
+                console.warn(`${data.name} 缺少 modelFile 欄位，嘗試使用名稱搜尋...`);
+                // 這裡僅作示範，實際上建議您在 JS 檔裡補上 modelFile
+                filename = "default.glb"; 
+            }
+
+            const path = `./models/${filename}`;
+
+            gltfLoader.load(path, (gltf) => {
+                isResultMode = true;
+                document.body.classList.add('result-mode');
+                document.getElementById('loading-screen').style.display = 'none';
+
+                if (currentModel) scene.remove(currentModel);
+                if (particleSystem) scene.remove(particleSystem);
+
+                currentModel = gltf.scene;
+
+                // --- 自動正規化大小 (Normalization) ---
+                // 因為每個 GLB 原始大小可能不同，這段程式碼會自動把它縮放到合適尺寸
+                const box = new THREE.Box3().setFromObject(currentModel);
+                const size = new THREE.Vector3();
+                box.getSize(size);
+                const maxDim = Math.max(size.x, size.y, size.z);
+                const scaleFactor = 4.5 / maxDim; // 目標大小約 4.5 單位
+                currentModel.scale.set(scaleFactor, scaleFactor, scaleFactor);
+
+                // 自動置中
+                const center = new THREE.Vector3();
+                box.getCenter(center);
+                currentModel.position.sub(center.multiplyScalar(scaleFactor));
+
+                // --- 位置調整 (偏左) ---
+                // 為了不被右側文字擋住
+                if(window.innerWidth > 768) {
+                    currentModel.position.x -= 2.5; 
+                } else {
+                    currentModel.position.y += 1.0;
+                }
+
+                // 旋轉一下展示
+                currentModel.rotation.y = Math.PI / 4;
+
+                scene.add(currentModel);
+
+                // --- 增加 V3 閃耀粒子 (Magic Particles) ---
+                addSparkles(currentModel.position);
+
+                // --- 更新 UI 文字 ---
+                updateUI(data);
+
+                // --- 相機調整 ---
+                camera.position.set(currentModel.position.x, 0, 12);
+                controls.target.set(currentModel.position.x, 0, 0);
+                controls.autoRotateSpeed = 2.0;
+                controls.enableZoom = true;
+
+            }, 
+            (xhr) => {
+                // Progress
+                console.log((xhr.loaded / xhr.total * 100) + '% loaded');
+            }, 
+            (error) => {
+                console.error('模型載入失敗:', error);
+                document.getElementById('loading-screen').innerHTML = "水晶召喚失敗<br>請確認檔案路徑";
+            });
+        }
+
+        // --- 7. 閃耀粒子特效 ---
+        function addSparkles(centerPos) {
+            const particlesGeo = new THREE.BufferGeometry();
+            const count = 50;
+            const positions = new Float32Array(count * 3);
+            
+            for(let i=0; i<count; i++) {
+                // 在中心點周圍隨機分佈
+                positions[i*3] = centerPos.x + (Math.random() - 0.5) * 5;
+                positions[i*3+1] = centerPos.y + (Math.random() - 0.5) * 6;
+                positions[i*3+2] = centerPos.z + (Math.random() - 0.5) * 5;
+            }
+            
+            particlesGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            
+            const pMat = new THREE.PointsMaterial({
+                color: 0xFFD700,
+                size: 0.15,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+
+            particleSystem = new THREE.Points(particlesGeo, pMat);
+            scene.add(particleSystem);
+        }
+
+        function updateUI(data) {
+            const panel = document.getElementById('panel-content');
+            panel.innerHTML = `
+                <div class="crystal-header">
+                    <div class="crystal-theme">${data.theme}</div>
+                    <div class="crystal-name">${data.name}</div>
+                </div>
+                
+                <div class="content-block">
+                    <span class="section-label">Crystal Message</span>
+                    <div class="text-body">${data.message}</div>
+                </div>
+
+                <div class="content-block">
+                    <span class="section-label">Core Question</span>
+                    <div class="text-body" style="font-weight: 500; color: #222;">${data.question}</div>
+                </div>
+
+                <div class="divider-graphic"></div>
+
+                <div class="content-block">
+                    <span class="section-label">Crystal Action</span>
+                    <div class="quote-box">
+                        <div class="quote-text">${data.action}</div>
+                    </div>
+                    <div class="text-body">${data.subAction}</div>
+                </div>
+            `;
+        }
+
+        function resetApp() {
+            document.body.classList.remove('result-mode');
+            const landing = document.getElementById('landing-content');
+            landing.style.display = 'block';
+            setTimeout(() => { landing.style.opacity = '1'; }, 100);
+
+            if(currentModel) {
+                scene.remove(currentModel);
+                currentModel = null;
+            }
+            if(particleSystem) {
+                scene.remove(particleSystem);
+                particleSystem = null;
+            }
+
+            initNebula();
+            
+            // 重置相機
+            camera.position.set(0, 0, 30);
+            controls.target.set(0,0,0);
+            controls.autoRotateSpeed = 0.5;
+            controls.enableZoom = false;
+            isResultMode = false;
+        }
+
+        // --- 動畫循環 ---
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (!isResultMode) {
+                // 首頁星雲旋轉
+                nebulaGroup.rotation.y += 0.002;
+            } else {
+                // 結果頁特效
+                if(currentModel) {
+                    // 讓模型緩慢漂浮
+                    currentModel.position.y += Math.sin(Date.now() * 0.001) * 0.002;
+                    // 粒子也跟著微動
+                    if(particleSystem) {
+                        particleSystem.rotation.y -= 0.001;
+                    }
+                }
+            }
+
+            controls.update();
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // RWD 調整
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+    </script>
+</body>
+</html>
