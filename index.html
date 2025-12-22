@@ -180,7 +180,34 @@
     </div>
 
     <script>
+
+        function updateLoading(loaded, total) {
+    const percent = Math.floor((loaded / total) * 100);
+    const text = document.getElementById('loading-text');
+    if (text) text.innerText = `${percent}%`;
+
+    if (loaded >= total) {
+        const loading = document.getElementById('loading-screen');
+        if (loading) loading.style.opacity = 0;
+
+        const stage = document.getElementById('center-stage');
+        stage.style.display = 'flex';
+        setTimeout(() => stage.style.opacity = 1, 300);
+    }
+}
+
         // --- 全域變數 ---
+        function setupModelInNebula(model, x, y, z, data, index) {
+    model.position.set(x, y, z);
+
+    // 縮放
+    const scale = 0.5 + Math.random() * 0.5;
+    model.scale.set(scale, scale, scale);
+
+    model.userData = { index, data };
+    crystals.push(model);
+    nebulaGroup.add(model);
+}
         let scene, camera, renderer, controls;
         let nebulaGroup = new THREE.Group();
         let crystals = []; // 存放所有 3D 水晶物件
@@ -240,6 +267,7 @@
 
             // 初始化小狼系統
             initWolfSystem();
+            checkDailyReward();
 
             // 動畫循環
             animate();
@@ -259,9 +287,9 @@ function loadCrystalsNebula() {
     loader.setDRACOLoader(dracoLoader);
 
     let loadedCount = 0;
-    const total = window.crystalsData.length;
-    const loadingText = document.getElementById('loading-text');
-
+    const crystalsArray = Object.values(window.crystalsData);
+    const total = crystalsArray.length;
+    
     console.log(`開始解碼並載入 ${total} 顆水晶...`);
 
     // 這裡建議先將 Object 轉為 Array 處理 (如果 crystalsData 是物件格式)
@@ -440,40 +468,37 @@ function loadCrystalsNebula() {
         // --- 4. 抽卡互動邏輯 ---
         
         function startJourney() {
-            // 播放點擊音效(選配)
-            ensureAudio();
+    ensureAudio();
 
-            // UI 切換
-            document.getElementById('center-stage').style.opacity = 0;
-            setTimeout(() => { document.getElementById('center-stage').style.display = 'none'; }, 500);
+    document.getElementById('center-stage').style.opacity = 0;
+    setTimeout(() => {
+        document.getElementById('center-stage').style.display = 'none';
+    }, 500);
 
-            // 選擇水晶
-            const randomIndex = Math.floor(Math.random() * window.crystalsData.length);
-            const data = window.crystalsData[randomIndex];
-            
-            // 找出對應的 3D 物件 (如果已經載入)
-            // 簡單起見，我們隱藏星雲，單獨顯示這顆水晶
-            
-            scene.remove(nebulaGroup);
+    const crystalsArray = Object.values(window.crystalsData);
+    const randomIndex = Math.floor(Math.random() * crystalsArray.length);
+    const data = crystalsArray[randomIndex];
 
-            // 載入高畫質版或直接用星雲裡的
-            // 這裡直接載入一顆新的放在中間
-            const dracoLoader = new THREE.DRACOLoader();
-            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
-            const loader = new THREE.GLTFLoader();
-            loader.setDRACOLoader(dracoLoader);
+    scene.remove(nebulaGroup);
 
-            const path = `./models/${data.modelFile}`;
-            loader.load(path, (gltf) => {
-                showResult(gltf.scene, data);
-            }, undefined, (err) => {
-                // 失敗 fallback
-                const geo = new THREE.IcosahedronGeometry(2, 0);
-                const mat = new THREE.MeshStandardMaterial({color: 0x88ccff});
-                const mesh = new THREE.Mesh(geo, mat);
-                showResult(mesh, data);
-            });
-        }
+    const dracoLoader = new THREE.DRACOLoader();
+    dracoLoader.setDecoderPath(
+      'https://www.gstatic.com/draco/versioned/decoders/1.4.3/'
+    );
+
+    const loader = new THREE.GLTFLoader();
+    loader.setDRACOLoader(dracoLoader);
+
+    const path = `./models/${data.modelFile}`;
+    loader.load(path, (gltf) => {
+        showResult(gltf.scene, data);
+    }, undefined, () => {
+        const geo = new THREE.IcosahedronGeometry(2, 0);
+        const mat = new THREE.MeshStandardMaterial({ color: 0x88ccff });
+        showResult(new THREE.Mesh(geo, mat), data);
+    });
+}
+
 
         function showResult(model, data) {
             isResultMode = true;
