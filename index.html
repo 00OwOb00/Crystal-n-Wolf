@@ -250,8 +250,7 @@
         // --- 2. 載入水晶星雲 (GLTF + Draco) ---
         function loadCrystalsNebula() {
             const dracoLoader = new THREE.DRACOLoader();
-            // 設定解碼器路徑
-            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/libs/draco/');
+            dracoLoader.setDecoderPath('https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/DRACOLoader.js'); // 修正路徑寫法
 
             const loader = new THREE.GLTFLoader();
             loader.setDRACOLoader(dracoLoader);
@@ -260,13 +259,10 @@
             const total = window.crystalsData.length;
             const loadingText = document.getElementById('loading-text');
 
-            // 為了效能，我們不一次載入52個獨立檔案 (這會導致瀏覽器崩潰)
-            // 策略：先用簡單的幾何體佔位，或者如果模型檔案不大，可以嘗試。
-            // 考慮到您的需求是「真實水晶」，我們這裡模擬載入過程，並實際載入模型。
-            // 若模型尚未準備好，會使用替代幾何體。
+            console.log(`開始載入 ${total} 顆水晶...`);
 
-            window.crystalsData.forEach((data, index) => {
-                // 隨機分佈
+            window.crystalsData.forEach((data, index) => { // 這裡有 index
+                // 隨機星雲分佈座標
                 const radius = 10 + Math.random() * 15;
                 const theta = Math.random() * Math.PI * 2;
                 const phi = Math.acos((Math.random() * 2) - 1);
@@ -275,20 +271,32 @@
                 const y = radius * Math.sin(phi) * Math.sin(theta);
                 const z = radius * Math.cos(phi);
 
-                // 嘗試載入模型
-                const path = `./models/${data.modelFile}`;
+                // 檢查是否有檔名，若無則使用預設
+                const filename = data.modelFile || 'default.glb';
+                const path = `./models/${filename}`;
                 
                 loader.load(path, (gltf) => {
                     const model = gltf.scene;
-                    setupModelInNebula(model, x, y, z, data);
+                    // 修正：這裡傳入了 index
+                    setupModelInNebula(model, x, y, z, data, index); 
+                    
                     loadedCount++;
                     updateLoading(loadedCount, total);
                 }, undefined, (err) => {
-                    // 載入失敗 (可能是檔案不存在)，使用替代球體
+                    // 載入失敗 (404) 的處理：生成替代球體，讓網站不卡住
+                    console.warn(`載入失敗: ${filename}，使用替代幾何體。`, err);
+                    
                     const geo = new THREE.IcosahedronGeometry(0.5, 0);
-                    const mat = new THREE.MeshStandardMaterial({ color: Math.random() * 0xffffff, roughness: 0.3, metalness: 0.8 });
+                    const mat = new THREE.MeshStandardMaterial({ 
+                        color: Math.random() * 0xffffff, 
+                        roughness: 0.3, 
+                        metalness: 0.8 
+                    });
                     const mesh = new THREE.Mesh(geo, mat);
-                    setupModelInNebula(mesh, x, y, z, data);
+                    
+                    // 修正：這裡傳入了 index
+                    setupModelInNebula(mesh, x, y, z, data, index); 
+                    
                     loadedCount++;
                     updateLoading(loadedCount, total);
                 });
@@ -297,31 +305,44 @@
             scene.add(nebulaGroup);
         }
 
-        function setupModelInNebula(obj, x, y, z, data) {
+        // 修正後的 setupModelInNebula，增加了 index 參數
+        function setupModelInNebula(obj, x, y, z, data, index) {
             obj.position.set(x, y, z);
             obj.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, 0);
             
             // 星雲模式下縮小
             obj.scale.set(0.3, 0.3, 0.3);
             
-            // 綁定資料
-            obj.userData = { id: index, data: data, originalPos: new THREE.Vector3(x,y,z) };
+            // 綁定資料 (這裡原本報錯是因為找不到 index)
+            obj.userData = { 
+                id: index, 
+                data: data, 
+                originalPos: new THREE.Vector3(x,y,z) 
+            };
             
             nebulaGroup.add(obj);
             crystals.push(obj);
         }
 
+        // 確保 updateLoading 邏輯正確
         function updateLoading(current, total) {
             const pct = Math.floor((current / total) * 100);
-            document.getElementById('loading-text').innerText = pct + "%";
+            const loadingText = document.getElementById('loading-text');
+            if(loadingText) loadingText.innerText = pct + "%";
             
-            if(current >= total || current >= 52) { // 稍微寬容
+            // 當全部跑完（包含失敗的）
+            if(current >= total) {
+                console.log("所有資源處理完畢，進入首頁");
                 setTimeout(() => {
-                    document.getElementById('loading-screen').style.opacity = 0;
-                    document.getElementById('center-stage').style.display = 'flex';
+                    const screen = document.getElementById('loading-screen');
+                    const stage = document.getElementById('center-stage');
+                    
+                    if(screen) screen.style.opacity = 0;
+                    if(stage) stage.style.display = 'flex';
+                    
                     setTimeout(() => {
-                         document.getElementById('loading-screen').style.display = 'none';
-                         checkDailyReward(); // 載入完成後檢查獎勵
+                         if(screen) screen.style.display = 'none';
+                         if(typeof checkDailyReward === "function") checkDailyReward();
                     }, 500);
                 }, 500);
             }
