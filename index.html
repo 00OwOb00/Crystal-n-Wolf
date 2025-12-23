@@ -277,53 +277,66 @@
 
         // --- 2. 載入水晶星雲 (GLTF + Draco) ---
 function loadCrystalsNebula() {
+    c// --- 修正後的載入水晶星雲函式 ---
+function loadCrystalsNebula() {
     const dracoLoader = new THREE.DRACOLoader();
-    
-    // --- 關鍵修正：使用 Google 託管的 Draco 解碼器路徑 ---
-    // 這裡必須指向包含 .js 和 .wasm 檔案的資料夾
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
 
     const loader = new THREE.GLTFLoader();
     loader.setDRACOLoader(dracoLoader);
 
-    let loadedCount = 0;
-    const crystalsArray = Object.values(window.crystalsData);
-    const total = crystalsArray.length;
-    
-    console.log(`開始解碼並載入 ${total} 顆水晶...`);
-
-    // 這裡建議先將 Object 轉為 Array 處理 (如果 crystalsData 是物件格式)
     const dataEntries = Object.entries(window.crystalsData);
+    const total = dataEntries.length;
+    
+    // 定義四圈同心圓的參數
+    const numRings = 4;
+    const ringRadii = [18, 30, 42, 54]; // 從 18 開始增加，避免太靠近攝影機(z=25)
+    const crystalsPerRing = Math.ceil(total / numRings); // 每圈分配的水晶數量
 
-    dataEntries.forEach(([key, data]) => {
+    console.log(`開始以四圈同心圓排列載入 ${total} 顆水晶...`);
+
+    dataEntries.forEach(([key, data], i) => {
         const index = parseInt(key);
-        const radius = 10 + Math.random() * 15;
-        const theta = Math.random() * Math.PI * 2;
-        const phi = Math.acos((Math.random() * 2) - 1);
         
-        const x = radius * Math.sin(phi) * Math.cos(theta);
-        const y = radius * Math.sin(phi) * Math.sin(theta);
-        const z = radius * Math.cos(phi);
+        // 計算這顆水晶應屬於哪一圈
+        const ringIndex = Math.floor(i / crystalsPerRing);
+        const indexInRing = i % crystalsPerRing;
+        
+        // 該圈實際上的總數 (最後一圈可能不滿)
+        const currentRingCount = (ringIndex === numRings - 1) ? 
+                                 (total - (ringIndex * crystalsPerRing)) : 
+                                 crystalsPerRing;
+
+        const radius = ringRadii[ringIndex];
+        const theta = (indexInRing / currentRingCount) * Math.PI * 2;
+
+        // 計算 XY 平面上的位置 (排列成圓圈)
+        const x = radius * Math.cos(theta);
+        const y = radius * Math.sin(theta);
+        
+        // Z 軸給予輕微隨機位移 (-2 到 2)，增加景深感並防止完美穿模
+        const z = (Math.random() - 0.5) * 4; 
 
         const filename = data.modelFile || 'default.glb';
         const path = `./models/${filename}`;
         
         loader.load(path, (gltf) => {
             const model = gltf.scene;
-            setupModelInNebula(model, x, y, z, data, index); 
-            loadedCount++;
-            updateLoading(loadedCount, total);
-        }, undefined, (err) => {
-            console.warn(`[跳過] 無法載入或解碼模型: ${filename}，這可能是路徑或格式問題。`, err);
             
-            // 即使出錯也畫一個小方塊代替，確保進度條會動
-            const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
+            // setupModelInNebula 已在您的原程式碼中定義
+            setupModelInNebula(model, x, y, z, data, index); 
+            
+            // 隨機旋轉，讓排列看起來更自然
+            model.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
+            
+            updateLoading(crystals.length, total);
+        }, undefined, (err) => {
+            console.warn(`[跳過] 模型載入失敗: ${filename}`, err);
+            const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
             const mat = new THREE.MeshStandardMaterial({ color: 0x444444 });
             const mesh = new THREE.Mesh(geo, mat);
             setupModelInNebula(mesh, x, y, z, data, index);
-            
-            loadedCount++;
-            updateLoading(loadedCount, total);
+            updateLoading(crystals.length, total);
         });
     });
     
