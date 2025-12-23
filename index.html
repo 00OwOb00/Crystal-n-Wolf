@@ -277,8 +277,8 @@
 
         // --- 2. 載入水晶星雲 (GLTF + Draco) ---
 function loadCrystalsNebula() {
-    c// --- 修正後的載入水晶星雲函式 ---
-function loadCrystalsNebula() {
+    let loadedCount = 0;
+   
     const dracoLoader = new THREE.DRACOLoader();
     dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
 
@@ -329,14 +329,16 @@ function loadCrystalsNebula() {
             // 隨機旋轉，讓排列看起來更自然
             model.rotation.set(Math.random() * Math.PI, Math.random() * Math.PI, 0);
             
-            updateLoading(crystals.length, total);
+            loadedCount++;
+updateLoading(loadedCount, total);
         }, undefined, (err) => {
             console.warn(`[跳過] 模型載入失敗: ${filename}`, err);
             const geo = new THREE.BoxGeometry(0.5, 0.5, 0.5);
             const mat = new THREE.MeshStandardMaterial({ color: 0x444444 });
             const mesh = new THREE.Mesh(geo, mat);
             setupModelInNebula(mesh, x, y, z, data, index);
-            updateLoading(crystals.length, total);
+            loadedCount++;
+updateLoading(loadedCount, total);
         });
     });
     
