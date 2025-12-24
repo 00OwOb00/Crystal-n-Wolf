@@ -140,7 +140,7 @@
     <div id="ui-layer">
         <div class="top-bar pointer-auto">
             <div class="logo">Crystal & Wolf</div>
-            <button class="audio-btn" onclick="toggleAudio()">🎵 Music: OFF</button>
+            <button class="audio-btn" onclick="toggleAudio()">🎵 Music: 🔇 </button>
         </div>
 
         <div id="loading-screen">
@@ -154,7 +154,7 @@
             <canvas id="wolf-canvas" width="64" height="64" title="點擊換裝"></canvas>
             
             <button class="cta-button" onclick="startJourney()">
-                <span>✦ 今天要專注什麼？</span>
+                <span>✦ 今天要專注在什麼層面？</span>
             </button>
             
             <button class="wardrobe-btn" onclick="openWardrobe()">🎒 打開衣櫃 (收藏: <span id="collection-count">0</span>)</button>
@@ -647,13 +647,13 @@ function loadCrystalsNebula() {
             if(audio.paused) {
                 audio.play();
                 audioPlaying = true;
-                btn.innerText = "🎵 Music: ON";
+                btn.innerText = "🎵 Music: 🔈";
                 btn.style.borderColor = "#fff";
                 btn.style.color = "#fff";
             } else {
                 audio.pause();
                 audioPlaying = false;
-                btn.innerText = "🎵 Music: OFF";
+                btn.innerText = "🎵 Music: 🔇";
                 btn.style.borderColor = "var(--gold)";
                 btn.style.color = "var(--gold)";
             }
