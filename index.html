@@ -140,7 +140,7 @@
     <div id="ui-layer">
         <div class="top-bar pointer-auto">
             <div class="logo">Crystal & Wolf</div>
-            <button class="audio-btn" onclick="toggleAudio()">🎵 Music: 🔇 </button>
+            <button class="audio-btn" onclick="toggleAudio()">🎵 Music: OFF</button>
         </div>
 
         <div id="loading-screen">
@@ -154,7 +154,7 @@
             <canvas id="wolf-canvas" width="64" height="64" title="點擊換裝"></canvas>
             
             <button class="cta-button" onclick="startJourney()">
-                <span>✦ 今天要專注在什麼層面？</span>
+                <span>✦ 今天要專注什麼？</span>
             </button>
             
             <button class="wardrobe-btn" onclick="openWardrobe()">🎒 打開衣櫃 (收藏: <span id="collection-count">0</span>)</button>
@@ -181,6 +181,27 @@
 
     <script>
 
+        // --- [新增] 產生星砂的材質貼圖 ---
+function getStarTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 32;
+    canvas.height = 32;
+    const ctx = canvas.getContext('2d');
+    
+    // 畫一個中心發光的柔和圓點
+    const gradient = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gradient.addColorStop(0, 'rgba(255, 255, 255, 1)');
+    gradient.addColorStop(0.2, 'rgba(255, 255, 255, 0.8)');
+    gradient.addColorStop(0.5, 'rgba(212, 175, 55, 0.2)'); // 帶點金色光暈
+    gradient.addColorStop(1, 'rgba(0, 0, 0, 0)');
+    
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 32, 32);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    return texture;
+}
+
         function updateLoading(loaded, total) {
     const percent = Math.floor((loaded / total) * 100);
     const text = document.getElementById('loading-text');
@@ -196,18 +217,6 @@
     }
 }
 
-        // --- 全域變數 ---
-        function setupModelInNebula(model, x, y, z, data, index) {
-    model.position.set(x, y, z);
-
-    // 縮放
-    const scale = 0.5 + Math.random() * 0.5;
-    model.scale.set(scale, scale, scale);
-
-    model.userData = { index, data };
-    crystals.push(model);
-    nebulaGroup.add(model);
-}
         let scene, camera, renderer, controls;
         let nebulaGroup = new THREE.Group();
         let crystals = []; // 存放所有 3D 水晶物件
@@ -220,10 +229,36 @@
             hat: { id: 0, color: 0 }, // 0 代表沒穿/初始
             top: { id: 0, color: 0 },
             bottom: { id: 0, color: 0 },
-            shoes: { id: 0, color: 0 },
             float: { id: 0, color: 0 },
             inventory: [] // 存放已解鎖的配件字串 "type_id_colorIndex"
         };
+
+        // --- [新增] 圖片快取系統 ---
+const imageCache = {};
+
+function preloadWolfImages() {
+    const parts = ['top', 'bottom', 'hat', 'float'];
+    
+    // 1. 載入素體
+    const baseImg = new Image();
+    baseImg.src = './assets/wolf/base.png';
+    baseImg.onload = () => { 
+        imageCache['base'] = baseImg; 
+        drawWolf(); // 載入完成後重畫一次
+    };
+
+    // 2. 載入所有配件
+    parts.forEach(type => {
+        for (let i = 1; i <= 6; i++) {
+            const img = new Image();
+            // 這裡的路徑對應到您GitHub的檔名
+            img.src = `./assets/wolf/${type}_${i}.png`;
+            img.onload = () => {
+                imageCache[`${type}_${i}`] = img;
+            };
+        }
+    });
+}
 
         // --- 1. 初始化與 3D 場景 ---
         function init() {
@@ -269,65 +304,81 @@
             initWolfSystem();
             checkDailyReward();
 
+            preloadWolfImages(); // <--- [新增這一行] 啟動圖片預載
+
             // 動畫循環
             animate();
             
             window.addEventListener('resize', onWindowResize);
         }
 
-        // --- 2. 載入水晶星雲 (GLTF + Draco) ---
+        // --- [修改] 改為生成星砂星雲 ---
 function loadCrystalsNebula() {
-    const dracoLoader = new THREE.DRACOLoader();
-    
-    // --- 關鍵修正：使用 Google 託管的 Draco 解碼器路徑 ---
-    // 這裡必須指向包含 .js 和 .wasm 檔案的資料夾
-    dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.4.3/');
+    // 1. 建立粒子幾何體
+    const particlesGeometry = new THREE.BufferGeometry();
+    const particleCount = 1500; // 星星數量，可自行增減
 
-    const loader = new THREE.GLTFLoader();
-    loader.setDRACOLoader(dracoLoader);
+    const positions = [];
+    const colors = [];
+    const sizes = [];
 
-    let loadedCount = 0;
-    const crystalsArray = Object.values(window.crystalsData);
-    const total = crystalsArray.length;
-    
-    console.log(`開始解碼並載入 ${total} 顆水晶...`);
+    const color1 = new THREE.Color(0xD4AF37); // 金色
+    const color2 = new THREE.Color(0xFFFFFF); // 白色
+    const color3 = new THREE.Color(0x88CCFF); // 淡藍色 (增加層次)
 
-    // 這裡建議先將 Object 轉為 Array 處理 (如果 crystalsData 是物件格式)
-    const dataEntries = Object.entries(window.crystalsData);
-
-    dataEntries.forEach(([key, data]) => {
-        const index = parseInt(key);
-        const radius = 10 + Math.random() * 15;
+    for (let i = 0; i < particleCount; i++) {
+        // 位置：在球體範圍內隨機分布，製造星雲感
+        const r = 15 + Math.random() * 25; // 半徑範圍
         const theta = Math.random() * Math.PI * 2;
         const phi = Math.acos((Math.random() * 2) - 1);
-        
-        const x = radius * Math.sin(phi) * Math.cos(theta);
-        const y = radius * Math.sin(phi) * Math.sin(theta);
-        const z = radius * Math.cos(phi);
 
-        const filename = data.modelFile || 'default.glb';
-        const path = `./models/${filename}`;
-        
-        loader.load(path, (gltf) => {
-            const model = gltf.scene;
-            setupModelInNebula(model, x, y, z, data, index); 
-            loadedCount++;
-            updateLoading(loadedCount, total);
-        }, undefined, (err) => {
-            console.warn(`[跳過] 無法載入或解碼模型: ${filename}，這可能是路徑或格式問題。`, err);
-            
-            // 即使出錯也畫一個小方塊代替，確保進度條會動
-            const geo = new THREE.BoxGeometry(0.3, 0.3, 0.3);
-            const mat = new THREE.MeshStandardMaterial({ color: 0x444444 });
-            const mesh = new THREE.Mesh(geo, mat);
-            setupModelInNebula(mesh, x, y, z, data, index);
-            
-            loadedCount++;
-            updateLoading(loadedCount, total);
-        });
+        let x = r * Math.sin(phi) * Math.cos(theta);
+        let y = r * Math.sin(phi) * Math.sin(theta);
+        let z = r * Math.cos(phi);
+
+        // 稍微壓扁一點，像銀河盤 (選擇性)
+        y = y * 0.6; 
+
+        positions.push(x, y, z);
+
+        // 顏色：隨機混合金、白、藍
+        const randomColor = Math.random();
+        let c;
+        if (randomColor < 0.6) c = color1; // 60% 金色
+        else if (randomColor < 0.9) c = color2; // 30% 白色
+        else c = color3; // 10% 藍色
+
+        colors.push(c.r, c.g, c.b);
+
+        // 大小：隨機大小
+        sizes.push(0.2 + Math.random() * 0.8);
+    }
+
+    particlesGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    particlesGeometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+    particlesGeometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+
+    // 2. 建立粒子材質
+    const particlesMaterial = new THREE.PointsMaterial({
+        size: 0.5,
+        map: getStarTexture(), // 使用剛剛寫的貼圖函式
+        vertexColors: true, // 啟用頂點顏色
+        transparent: true,
+        opacity: 0.8,
+        depthWrite: false, // 讓星星可以互相重疊不遮擋
+        blending: THREE.AdditiveBlending // 發光疊加效果
     });
+
+    // 3. 建立粒子系統並加入群組
+    const particleSystem = new THREE.Points(particlesGeometry, particlesMaterial);
+    particleSystem.name = 'starryNebula'; // 給個名字方便管理
     
+    // 讓原本的程式邏輯也能運作，我們把這個系統加入 nebulaGroup
+    nebulaGroup.add(particleSystem);
     scene.add(nebulaGroup);
+
+    // 4. 直接完成載入 (因為不需要讀檔了)
+    updateLoading(100, 100);
 }
         // --- 3. 小狼養成系統 (Canvas) ---
         
@@ -405,23 +456,64 @@ function loadCrystalsNebula() {
             document.getElementById('collection-count').innerText = wolfState.inventory.length;
         }
 
-        // --- 核心：繪製小狼 ---
-        function drawWolf() {
-            const canvas = document.getElementById('wolf-canvas');
-            const ctx = canvas.getContext('2d');
-            ctx.clearRect(0, 0, 64, 64);
+        // --- 核心：繪製小狼 (修正版) ---
+function drawWolf() {
+    const canvas = document.getElementById('wolf-canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.clearRect(0, 0, 64, 64);
 
-            // 繪圖順序：素體 -> 褲子 -> 鞋子 -> 上衣 -> 帽子 -> 漂浮物
-            // 這裡使用 "程式碼繪圖" 作為 fallback，如果您有圖片，請用 Image 物件載入
-            
-            drawLayer(ctx, 'base', {id:1}, 0); // 素體
-            drawLayer(ctx, 'bottom', wolfState.bottom, 1);
-            drawLayer(ctx, 'shoes', wolfState.shoes, 1); // 簡化
-            drawLayer(ctx, 'top', wolfState.top, 1);
-            drawLayer(ctx, 'hat', wolfState.hat, 1);
-            drawLayer(ctx, 'float', wolfState.float, 1);
-        }
+    // 確保素體已載入
+    if (imageCache['base']) {
+        ctx.drawImage(imageCache['base'], 0, 0, 64, 64);
+    }
 
+    // --- 圖層順序設定 (您要求的：上衣在下著上方) ---
+    // 順序：下著 -> 上衣 -> 帽子 -> 漂浮物
+    drawLayer(ctx, 'bottom', wolfState.bottom);
+    drawLayer(ctx, 'top', wolfState.top);
+    drawLayer(ctx, 'hat', wolfState.hat);
+    drawLayer(ctx, 'float', wolfState.float);
+}
+
+function drawLayer(ctx, type, item) {
+    // 如果沒穿或是編號0，就不畫
+    if (!item || item.id === 0) return;
+
+    // 檢查圖片是否已下載到快取中
+    const cacheKey = `${type}_${item.id}`;
+    const img = imageCache[cacheKey];
+
+    if (img) {
+        // 取得該配件的顏色代碼
+        const colorHex = window.wolfColors[item.color].hex;
+        
+        // 產生染色後的圖片
+        const tintedCanvas = getTintedCanvas(img, colorHex);
+        
+        // 畫在主畫布上
+        ctx.drawImage(tintedCanvas, 0, 0);
+    }
+}
+        // --- [新增] 將灰階圖染色的工具 ---
+function getTintedCanvas(img, color) {
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCanvas.width = 64;
+    tempCanvas.height = 64;
+
+    // 1. 繪製原始灰階圖
+    tempCtx.drawImage(img, 0, 0, 64, 64);
+
+    // 2. 設定混合模式：只在有像素的地方上色 (Source-Atop)
+    // 如果您的圖是半透明灰階，也可以試試 'multiply' (正片疊底)
+    tempCtx.globalCompositeOperation = 'source-atop';
+    
+    // 3. 填滿顏色
+    tempCtx.fillStyle = color;
+    tempCtx.fillRect(0, 0, 64, 64);
+
+    return tempCanvas;
+}
         // 模擬載入圖片與染色 (若無圖片則畫色塊)
         function drawLayer(ctx, type, item, scale) {
             if (!item || item.id === 0) return;
@@ -647,13 +739,13 @@ function loadCrystalsNebula() {
             if(audio.paused) {
                 audio.play();
                 audioPlaying = true;
-                btn.innerText = "🎵 Music: 🔈";
+                btn.innerText = "🎵 Music: ON";
                 btn.style.borderColor = "#fff";
                 btn.style.color = "#fff";
             } else {
                 audio.pause();
                 audioPlaying = false;
-                btn.innerText = "🎵 Music: 🔇";
+                btn.innerText = "🎵 Music: OFF";
                 btn.style.borderColor = "var(--gold)";
                 btn.style.color = "var(--gold)";
             }
@@ -674,24 +766,32 @@ function loadCrystalsNebula() {
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            
-            if(!isResultMode) {
-                // 星雲自轉
-                nebulaGroup.rotation.y += 0.001;
-                // 水晶自轉
-                crystals.forEach(c => {
-                    c.rotation.x += 0.005;
-                    c.rotation.y += 0.005;
-                });
-            } else if(currentCrystal) {
-                currentCrystal.rotation.y += 0.002;
-            }
+        // --- [修改] 動畫函式，增加星砂流動感 ---
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    
+    const time = Date.now() * 0.0005; // 獲取時間參數
 
-            renderer.render(scene, camera);
+    if(!isResultMode) {
+        // 1. 整體旋轉 (保留原本邏輯)
+        nebulaGroup.rotation.y += 0.001;
+        nebulaGroup.rotation.z = Math.sin(time * 0.5) * 0.05; // 輕微擺動
+
+        // 2. 讓星星有呼吸閃爍感 (選用，若效能不好可移除)
+        const nebula = nebulaGroup.getObjectByName('starryNebula');
+        if (nebula) {
+             // 這裡可以做更多頂點動畫，但為了效能，我們先做簡單的整體縮放呼吸
+             const scale = 1 + Math.sin(time * 2) * 0.02;
+             nebula.scale.set(scale, scale, scale);
         }
+
+    } else if(currentCrystal) {
+        currentCrystal.rotation.y += 0.002;
+    }
+
+    renderer.render(scene, camera);
+}
 
         // 啟動
         init();
